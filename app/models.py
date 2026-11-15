@@ -1,15 +1,8 @@
 import datetime
-from sqlalchemy import (
-    Column,
-    Integer,
-    String,
-    DateTime,
-    ForeignKey,
-    Date,
-    UniqueConstraint,
-    Index
-)
+
+from sqlalchemy import Column, Date, DateTime, ForeignKey, Index, Integer, String, UniqueConstraint
 from sqlalchemy.orm import relationship
+
 from app.database import Base
 
 
@@ -23,7 +16,7 @@ class Trip(Base):
     origin = Column(String(50), nullable=False)
     destination = Column(String(50), nullable=False)
     departure_time = Column(String(10), nullable=False)  # HH:MM format
-    arrival_time = Column(String(10), nullable=False)    # HH:MM format
+    arrival_time = Column(String(10), nullable=False)  # HH:MM format
     travel_date = Column(Date, nullable=False, index=True)
     total_seats = Column(Integer, nullable=False, default=30)
     stops = Column(String(255), nullable=False)  # Comma-separated stops
@@ -36,7 +29,9 @@ class Seat(Base):
     __tablename__ = "seats"
 
     id = Column(Integer, primary_key=True, index=True)
-    trip_id = Column(Integer, ForeignKey("trips.id", ondelete="CASCADE"), nullable=False, index=True)
+    trip_id = Column(
+        Integer, ForeignKey("trips.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     seat_number = Column(String(10), nullable=False)
     # Status: AVAILABLE, BOOKED
     status = Column(String(20), nullable=False, default="AVAILABLE")
@@ -44,9 +39,7 @@ class Seat(Base):
 
     trip = relationship("Trip", back_populates="seats")
 
-    __table_args__ = (
-        UniqueConstraint("trip_id", "seat_number", name="uq_trip_seat_number"),
-    )
+    __table_args__ = (UniqueConstraint("trip_id", "seat_number", name="uq_trip_seat_number"),)
 
 
 class Booking(Base):
@@ -65,10 +58,13 @@ class Booking(Base):
     # Status: CONFIRMED, CANCELLED
     status = Column(String(20), nullable=False, default="CONFIRMED")
     created_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow, nullable=False)
+    updated_at = Column(
+        DateTime,
+        default=datetime.datetime.utcnow,
+        onupdate=datetime.datetime.utcnow,
+        nullable=False,
+    )
 
     trip = relationship("Trip", back_populates="bookings")
 
-    __table_args__ = (
-        Index("ix_booking_trip_seat_status", "trip_id", "seat_number", "status"),
-    )
+    __table_args__ = (Index("ix_booking_trip_seat_status", "trip_id", "seat_number", "status"),)

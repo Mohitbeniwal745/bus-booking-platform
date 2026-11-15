@@ -1,8 +1,10 @@
 import datetime
+
 from sqlalchemy.orm import Session
-from app.models import Trip, Seat
-from app.database import SessionLocal, Base, engine
+
+from app.database import Base, SessionLocal, engine
 from app.logger import logger
+from app.models import Seat, Trip
 
 
 def generate_seat_numbers(total_seats: int = 30):
@@ -11,10 +13,10 @@ def generate_seat_numbers(total_seats: int = 30):
     letters = ["A", "B", "C", "D"]
     count = 0
     for r in range(1, rows + 1):
-        for l in letters:
+        for col in letters:
             if count >= total_seats:
                 break
-            seats.append(f"{r}{l}")
+            seats.append(f"{r}{col}")
             count += 1
     return seats
 
@@ -86,11 +88,7 @@ def seed_database(db: Session):
 
         seat_numbers = generate_seat_numbers(trip.total_seats)
         for s_num in seat_numbers:
-            seat = Seat(
-                trip_id=trip.id,
-                seat_number=s_num,
-                status="AVAILABLE"
-            )
+            seat = Seat(trip_id=trip.id, seat_number=s_num, status="AVAILABLE")
             db.add(seat)
 
     db.commit()

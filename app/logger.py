@@ -3,6 +3,7 @@ import logging
 import sys
 import time
 import uuid
+
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 
@@ -64,8 +65,8 @@ class StructuredLoggingMiddleware(BaseHTTPMiddleware):
                     "method": request.method,
                     "path": request.url.path,
                     "status_code": response.status_code,
-                    "duration_ms": duration_ms
-                }
+                    "duration_ms": duration_ms,
+                },
             )
             return response
         except Exception as exc:
@@ -77,8 +78,8 @@ class StructuredLoggingMiddleware(BaseHTTPMiddleware):
                     "method": request.method,
                     "path": request.url.path,
                     "status_code": 500,
-                    "duration_ms": duration_ms
+                    "duration_ms": duration_ms,
                 },
-                exc_info=True
+                exc_info=True,
             )
             raise

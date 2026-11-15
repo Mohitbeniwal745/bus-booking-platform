@@ -4,24 +4,24 @@ import string
 from contextlib import asynccontextmanager
 from typing import List, Optional
 
-from fastapi import FastAPI, Depends, HTTPException, status, Query
+from fastapi import Depends, FastAPI, HTTPException, Query, status
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy.orm import Session
 from sqlalchemy import text
+from sqlalchemy.orm import Session
 
-from app.database import engine, Base, get_db, SessionLocal
-from app.models import Trip, Seat, Booking
+from app.database import Base, SessionLocal, engine, get_db
+from app.logger import StructuredLoggingMiddleware, logger
+from app.models import Booking, Seat, Trip
 from app.schemas import (
-    HealthResponse,
-    ReadinessResponse,
-    TripResponse,
-    SeatMapResponse,
-    SeatResponse,
+    BookingCancelResponse,
     BookingCreateRequest,
     BookingResponse,
-    BookingCancelResponse,
+    HealthResponse,
+    ReadinessResponse,
+    SeatMapResponse,
+    SeatResponse,
+    TripResponse,
 )
-from app.logger import logger, StructuredLoggingMiddleware
 from app.seed import seed_database
 
 
@@ -68,12 +68,8 @@ app.add_middleware(
 
 # --- Observability Probes ---
 
-@app.get(
-    "/health",
-    response_model=HealthResponse,
-    tags=["Observability"],
-    summary="Liveness Probe"
-)
+
+@app.get("/health", response_model=HealthResponse, tags=["Observability"], summary="Liveness Probe")
 def health_check():
     """Returns 200 OK if the application process is running."""
     return HealthResponse(
@@ -85,10 +81,7 @@ def health_check():
 
 
 @app.get(
-    "/ready",
-    response_model=ReadinessResponse,
-    tags=["Observability"],
-    summary="Readiness Probe"
+    "/ready", response_model=ReadinessResponse, tags=["Observability"], summary="Readiness Probe"
 )
 def readiness_check(db: Session = Depends(get_db)):
     """Verifies live database connectivity. Returns 503 if database is unreachable."""
@@ -103,23 +96,23 @@ def readiness_check(db: Session = Depends(get_db)):
         logger.error(f"Readiness check failed: {exc}")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"Database connection failure: {str(exc)}"
+            detail=f"Database connection failure: {str(exc)}",
         )
 
 
 # --- Domain API Endpoints ---
 
+
 @app.get(
-    "/trips",
-    response_model=List[TripResponse],
-    tags=["Trips"],
-    summary="List available bus trips"
+    "/trips", response_model=List[TripResponse], tags=["Trips"], summary="List available bus trips"
 )
 def list_trips(
-    travel_date: Optional[datetime.date] = Query(None, description="Filter by travel date (YYYY-MM-DD)"),
+    travel_date: Optional[datetime.date] = Query(
+        None, description="Filter by travel date (YYYY-MM-DD)"
+    ),
     origin: Optional[str] = Query(None, description="Filter by origin city"),
     destination: Optional[str] = Query(None, description="Filter by destination city"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     query = db.query(Trip)
     if travel_date:
@@ -133,19 +126,21 @@ def list_trips(
     results = []
     for t in trips:
         stops_list = [s.strip() for s in t.stops.split(",") if s.strip()]
-        results.append(TripResponse(
-            id=t.id,
-            trip_code=t.trip_code,
-            bus_number=t.bus_number,
-            route_name=t.route_name,
-            origin=t.origin,
-            destination=t.destination,
-            departure_time=t.departure_time,
-            arrival_time=t.arrival_time,
-            travel_date=t.travel_date,
-            total_seats=t.total_seats,
-            stops=stops_list
-        ))
+        results.append(
+            TripResponse(
+                id=t.id,
+                trip_code=t.trip_code,
+                bus_number=t.bus_number,
+                route_name=t.route_name,
+                origin=t.origin,
+                destination=t.destination,
+                departure_time=t.departure_time,
+                arrival_time=t.arrival_time,
+                travel_date=t.travel_date,
+                total_seats=t.total_seats,
+                stops=stops_list,
+            )
+        )
     return results
 
 
@@ -153,14 +148,13 @@ def list_trips(
     "/trips/{trip_id}/seats",
     response_model=SeatMapResponse,
     tags=["Trips"],
-    summary="Get seat map and availability for a trip"
+    summary="Get seat map and availability for a trip",
 )
 def get_trip_seats(trip_id: int, db: Session = Depends(get_db)):
     trip = db.query(Trip).filter(Trip.id == trip_id).first()
     if not trip:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Trip ID {trip_id} not found."
+            status_code=status.HTTP_404_NOT_FOUND, detail=f"Trip ID {trip_id} not found."
         )
 
     seats = db.query(Seat).filter(Seat.trip_id == trip_id).order_by(Seat.id).all()
@@ -173,7 +167,7 @@ def get_trip_seats(trip_id: int, db: Session = Depends(get_db)):
         total_seats=trip.total_seats,
         available_seats_count=available_count,
         booked_seats_count=booked_count,
-        seats=[SeatResponse.model_validate(s) for s in seats]
+        seats=[SeatResponse.model_validate(s) for s in seats],
     )
 
 
@@ -182,7 +176,7 @@ def get_trip_seats(trip_id: int, db: Session = Depends(get_db)):
     response_model=BookingResponse,
     status_code=status.HTTP_201_CREATED,
     tags=["Bookings"],
-    summary="Create seat reservation (Concurrency-Safe)"
+    summary="Create seat reservation (Concurrency-Safe)",
 )
 def create_booking(payload: BookingCreateRequest, db: Session = Depends(get_db)):
     """
@@ -194,14 +188,14 @@ def create_booking(payload: BookingCreateRequest, db: Session = Depends(get_db))
     if not trip:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Trip with ID {payload.trip_id} does not exist."
+            detail=f"Trip with ID {payload.trip_id} does not exist.",
         )
 
     # 2. Validate travel date matches trip travel date
     if payload.travel_date != trip.travel_date:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Requested travel date {payload.travel_date} does not match trip scheduled date {trip.travel_date}."
+            detail=f"Requested travel date {payload.travel_date} does not match trip scheduled date {trip.travel_date}.",
         )
 
     # 3. Validate boarding and drop stops
@@ -209,20 +203,19 @@ def create_booking(payload: BookingCreateRequest, db: Session = Depends(get_db))
     if payload.boarding_stop.lower() not in valid_stops:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Boarding stop '{payload.boarding_stop}' is not a valid stop for this trip route. Valid stops: {trip.stops}"
+            detail=f"Boarding stop '{payload.boarding_stop}' is not a valid stop for this trip route. Valid stops: {trip.stops}",
         )
     if payload.drop_stop.lower() not in valid_stops:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Drop stop '{payload.drop_stop}' is not a valid stop for this trip route. Valid stops: {trip.stops}"
+            detail=f"Drop stop '{payload.drop_stop}' is not a valid stop for this trip route. Valid stops: {trip.stops}",
         )
 
     # 4. Atomic seat reservation with row-level lock
     # In SQLite (during simple tests) with_for_update is a no-op; in PostgreSQL it locks the specific row.
     try:
         seat_query = db.query(Seat).filter(
-            Seat.trip_id == payload.trip_id,
-            Seat.seat_number == payload.seat_number
+            Seat.trip_id == payload.trip_id, Seat.seat_number == payload.seat_number
         )
         # Apply row-level lock where supported
         try:
@@ -233,13 +226,13 @@ def create_booking(payload: BookingCreateRequest, db: Session = Depends(get_db))
         if not seat:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Seat '{payload.seat_number}' does not exist on trip {trip.trip_code}."
+                detail=f"Seat '{payload.seat_number}' does not exist on trip {trip.trip_code}.",
             )
 
         if seat.status != "AVAILABLE":
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail=f"Seat '{payload.seat_number}' is already booked or unavailable on trip {trip.trip_code}."
+                detail=f"Seat '{payload.seat_number}' is already booked or unavailable on trip {trip.trip_code}.",
             )
 
         # 5. Reserve seat & Create Booking
@@ -291,7 +284,7 @@ def create_booking(payload: BookingCreateRequest, db: Session = Depends(get_db))
         logger.error(f"Booking transaction error: {exc}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="An error occurred while processing the reservation."
+            detail="An error occurred while processing the reservation.",
         )
 
 
@@ -299,7 +292,7 @@ def create_booking(payload: BookingCreateRequest, db: Session = Depends(get_db))
     "/bookings/{pnr}/cancel",
     response_model=BookingCancelResponse,
     tags=["Bookings"],
-    summary="Cancel booking and release reserved seat"
+    summary="Cancel booking and release reserved seat",
 )
 def cancel_booking(pnr: str, db: Session = Depends(get_db)):
     clean_pnr = pnr.strip().upper()
@@ -308,20 +301,21 @@ def cancel_booking(pnr: str, db: Session = Depends(get_db)):
     if not booking:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Booking with PNR '{clean_pnr}' not found."
+            detail=f"Booking with PNR '{clean_pnr}' not found.",
         )
 
     if booking.status == "CANCELLED":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Booking '{clean_pnr}' is already cancelled."
+            detail=f"Booking '{clean_pnr}' is already cancelled.",
         )
 
     # Release seat
-    seat = db.query(Seat).filter(
-        Seat.trip_id == booking.trip_id,
-        Seat.seat_number == booking.seat_number
-    ).first()
+    seat = (
+        db.query(Seat)
+        .filter(Seat.trip_id == booking.trip_id, Seat.seat_number == booking.seat_number)
+        .first()
+    )
 
     if seat:
         seat.status = "AVAILABLE"
@@ -344,7 +338,7 @@ def cancel_booking(pnr: str, db: Session = Depends(get_db)):
     "/bookings/{pnr}",
     response_model=BookingResponse,
     tags=["Bookings"],
-    summary="Lookup booking details by PNR"
+    summary="Lookup booking details by PNR",
 )
 def get_booking(pnr: str, db: Session = Depends(get_db)):
     clean_pnr = pnr.strip().upper()
@@ -352,7 +346,7 @@ def get_booking(pnr: str, db: Session = Depends(get_db)):
     if not booking:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Booking with PNR '{clean_pnr}' not found."
+            detail=f"Booking with PNR '{clean_pnr}' not found.",
         )
 
     trip = db.query(Trip).filter(Trip.id == booking.trip_id).first()

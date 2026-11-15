@@ -1,7 +1,8 @@
 import concurrent.futures
 import datetime
-import requests
 import sys
+
+import requests
 
 BASE_URL = "http://localhost:8000"
 if len(sys.argv) > 1:
@@ -38,12 +39,12 @@ def send_booking(passenger):
 
 
 def run_concurrency_test():
-    print(f"\n==================================================")
-    print(f"  CONCURRENCY ACCEPTANCE TEST")
+    print("\n==================================================")
+    print("  CONCURRENCY ACCEPTANCE TEST")
     print(f"  Target: {BASE_URL}/bookings")
     print(f"  Trip ID: {TRIP_ID} | Target Seat: {TARGET_SEAT}")
     print(f"  Simultaneous Threads: {len(PASSENGERS)}")
-    print(f"==================================================\n")
+    print("==================================================\n")
 
     results = []
     with concurrent.futures.ThreadPoolExecutor(max_workers=len(PASSENGERS)) as executor:
@@ -60,7 +61,9 @@ def run_concurrency_test():
         if code == 201:
             success_count += 1
             pnrs.append(body.get("pnr"))
-            print(f"  -> HTTP 201 SUCCESS: Booked with PNR {body.get('pnr')} for {body.get('passenger_name')}")
+            print(
+                f"  -> HTTP 201 SUCCESS: Booked with PNR {body.get('pnr')} for {body.get('passenger_name')}"
+            )
         elif code == 409:
             conflict_count += 1
             print(f"  -> HTTP 409 CONFLICT: Blocked safely with detail: {body.get('detail')}")
@@ -74,7 +77,9 @@ def run_concurrency_test():
     print("--------------------------------------------------")
 
     if success_count == 1 and conflict_count == (len(PASSENGERS) - 1):
-        print("\n>>> ACCEPTANCE TEST PASSED: Zero duplicate bookings. Safe concurrency isolation verified! <<<\n")
+        print(
+            "\n>>> ACCEPTANCE TEST PASSED: Zero duplicate bookings. Safe concurrency isolation verified! <<<\n"
+        )
         return 0
     else:
         print("\n>>> ACCEPTANCE TEST FAILED: Concurrency violation detected! <<<\n")

@@ -1,6 +1,7 @@
 import datetime
-from typing import List, Optional
-from pydantic import BaseModel, Field, EmailStr, field_validator
+from typing import List
+
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
 
 # --- Health & Readiness Schemas ---
@@ -57,10 +58,16 @@ class TripResponse(BaseModel):
 # --- Booking Schemas ---
 class BookingCreateRequest(BaseModel):
     trip_id: int = Field(..., description="ID of the trip to book")
-    seat_number: str = Field(..., min_length=2, max_length=5, description="Seat identifier (e.g. 1A, 2B)")
+    seat_number: str = Field(
+        ..., min_length=2, max_length=5, description="Seat identifier (e.g. 1A, 2B)"
+    )
     passenger_name: str = Field(..., min_length=2, max_length=100)
-    passenger_email: EmailStr = Field(..., description="Valid email address for ticket PNR delivery")
-    passenger_phone: str = Field(..., min_length=8, max_length=15, description="Valid passenger contact number")
+    passenger_email: EmailStr = Field(
+        ..., description="Valid email address for ticket PNR delivery"
+    )
+    passenger_phone: str = Field(
+        ..., min_length=8, max_length=15, description="Valid passenger contact number"
+    )
     boarding_stop: str = Field(..., min_length=2, max_length=50)
     drop_stop: str = Field(..., min_length=2, max_length=50)
     travel_date: datetime.date = Field(..., description="Date of travel (YYYY-MM-DD)")
